@@ -1,0 +1,144 @@
+# .clinerules: Vue.js + P5.js Gradient Visualization App
+
+## Project Intelligence
+
+This file captures important patterns, preferences, and project intelligence that will help me work more effectively with this project. It will be updated as we discover new patterns and preferences throughout development.
+
+## Code Style and Organization
+
+### Vue Component Structure
+
+- Use Vue 3 Composition API with `<script setup>` syntax
+- Organize component files in the following order:
+  1. `<script setup>` (imports, reactive state, computed props, lifecycle hooks, methods)
+  2. `<template>` (component template)
+  3. `<style>` (component styles)
+- Use PascalCase for component names (e.g., `GradientCanvas.vue`)
+- Use kebab-case for custom element names in templates (e.g., `<gradient-canvas>`)
+
+### JavaScript/TypeScript Conventions
+
+- Use ES6+ features (arrow functions, destructuring, etc.)
+- Prefer `const` over `let` when variables won't be reassigned
+- Use camelCase for variable and function names
+- Use PascalCase for class and component names
+- Add JSDoc comments for complex functions
+
+### CSS/Styling Conventions
+
+- Use scoped styles in Vue components
+- Follow BEM naming convention for CSS classes
+- Use CSS variables for theming and consistent values
+- Implement responsive design with mobile-first approach
+
+## File Organization
+
+```
+src/
+├── assets/          # Static assets
+├── components/      # Vue components
+│   ├── ui/          # Generic UI components
+│   └── gradient/    # Gradient-specific components
+├── composables/     # Reusable composition functions
+├── router/          # Vue Router configuration
+├── stores/          # Pinia stores
+│   ├── gradient.js  # Gradient color steps store
+│   └── animation.js # Animation settings store
+├── views/           # Page components
+└── App.vue          # Root component
+```
+
+## Critical Implementation Paths
+
+### P5.js Integration
+
+- Always use P5.js in instance mode, not global mode
+- Create and destroy P5 instances in sync with Vue component lifecycle
+- Handle canvas resizing in the P5 `windowResized()` function
+- Use a dedicated container element for the P5 canvas
+
+```javascript
+// Example pattern for P5.js integration
+const canvasContainer = ref(null);
+let p5Instance = null;
+
+onMounted(() => {
+  p5Instance = new p5(sketch, canvasContainer.value);
+});
+
+onUnmounted(() => {
+  if (p5Instance) {
+    p5Instance.remove();
+  }
+});
+```
+
+### State Management
+
+- Use Pinia for global state management
+- Structure stores by domain (gradient, animation)
+- Use the `persist` option for state that should survive page refreshes
+- Watch store state in components to react to changes
+
+```javascript
+// Example pattern for store usage in components
+import { useGradientStore } from '@/stores/gradient';
+import { storeToRefs } from 'pinia';
+
+const gradientStore = useGradientStore();
+const { colorSteps } = storeToRefs(gradientStore);
+
+// Watch for changes to update P5 sketch
+watch(colorSteps, () => {
+  // Update visualization
+}, { deep: true });
+```
+
+### Gradient Rendering
+
+- Use P5.js `lerpColor()` for smooth color interpolation
+- Calculate gradient positions based on the current animation time
+- Use sine/cosine functions for undulating effects
+- Optimize by pre-calculating values when possible
+
+## Known Challenges
+
+1. **P5.js and Vue Integration**:
+   - P5.js was designed for global scope, not component-based architecture
+   - Solution: Use instance mode and proper lifecycle management
+
+2. **Performance Optimization**:
+   - Gradient animations can be CPU-intensive
+   - Solution: Limit unnecessary redraws, use appropriate frame rates
+
+3. **Responsive Canvas**:
+   - Canvas needs to resize with the window
+   - Solution: Use `@vueuse/core` for reactive dimensions and P5's `windowResized()`
+
+4. **Multiple Color Steps**:
+   - Interpolating between multiple colors is more complex than two colors
+   - Solution: Implement multi-step interpolation algorithm
+
+## User Preferences
+
+To be updated as we learn more about user preferences during development.
+
+## Tool Usage Patterns
+
+- Use Vue DevTools for debugging component state and Pinia stores
+- Use browser performance tools to monitor animation frame rates
+- Use ESLint and Prettier for code quality and formatting
+
+## Evolution of Project Decisions
+
+This section will track key decisions and their evolution as the project progresses.
+
+1. **Initial Architecture**: Component-based with P5.js in instance mode
+2. **State Management**: Pinia with separate stores for gradient and animation settings
+3. **UI Framework**: Material UI (MUI) for consistent design elements
+
+## Workflow Optimizations
+
+- Use hot module replacement (HMR) during development
+- Implement component-driven development workflow
+- Test gradient rendering in isolation before integrating with UI
