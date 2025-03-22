@@ -1,55 +1,62 @@
 ## **Gradient Feature Technical Requirements**  
 
-### **1. Spline Path**  
-- The gradient should follow a **spline path** (e.g., Catmull-Rom or Bézier).  
-- The spline path should be **editable** by the user:  
-   - Users can **add, remove, and adjust nodes**.  
-   - Nodes should be draggable using a mouse or touch input.  
-   - The spline should dynamically recalculate and redraw when nodes are adjusted.  
+## **Gradient Mesh Feature Technical Requirements**  
+
+### **1. Gradient Mesh Structure**  
+- The gradient should be defined as a **mesh of nodes**.  
+- The mesh should support a configurable number of **rows and columns**:  
+   - Default value: **6 rows** x **4 columns**.  
+   - Users can adjust the number of rows and columns dynamically.  
+- Nodes should represent **color stops** within the gradient:  
+   - Colors should be **blended** between adjacent nodes to create a smooth gradient.  
 
 ---
 
-### **2. Gradient Types**  
-- The gradient should support three types:  
-   - **Linear** – Gradient follows a straight line between start and end points.  
-   - **Radial** – Gradient radiates from a central point outward.  
-   - **Shaped** – Gradient follows the defined spline path.  
-- Users should be able to **switch gradient types** dynamically without restarting the animation.  
+### **2. Node Customization**  
+- Each node should be individually editable:  
+   - Users can **select a node** and assign it a specific color using a color picker.  
+   - Node positions within the mesh should be **draggable** for custom shapes.  
+   - The mesh should dynamically recalculate and redraw as nodes are adjusted.  
 
 ---
 
-### **3. Color Management**  
-- Users should be able to define **multiple color stops**:  
-   - Each stop should have a configurable **color** and **position** along the gradient path.  
-   - The gradient should **auto-update** in real-time when color stops are adjusted.  
-- Sliders should control the **blend** between adjacent colors.  
-   - Example: A "smoothness" slider to adjust the transition sharpness between colors.  
+### **3. Mesh Visibility**  
+- A **visibility toggle** should allow users to:  
+   - Turn the mesh **on** – Display the mesh grid and node handles.  
+   - Turn the mesh **off** – Hide the mesh while preserving the gradient.  
+- When the mesh is visible, nodes and handles should be clearly distinguishable from the gradient background.  
 
 ---
 
 ### **4. Animation**  
-- The color animation should be able to:  
-   - **Start** and **stop** with user controls.  
-   - **Cycle through colors** in a loop, maintaining consistent transitions.  
-   - Follow the defined spline path during the animation.  
-   - Maintain consistent timing regardless of frame rate.  
-- Animation timing should be **configurable**:  
-   - Speed setting should allow milliseconds or frames-per-second (FPS) input.  
+- The gradient colors should be able to animate through the mesh:  
+   - Animation should cycle through the colors of the mesh nodes.  
+   - Animation should support **start** and **stop** controls.  
+   - Animation speed should be configurable (milliseconds or FPS).  
    - Easing options (e.g., linear, ease-in, ease-out) for smooth transitions.  
 
 ---
 
-### **5. UI/UX Controls**  
-- UI should provide the following:  
-   - **Add/Remove nodes** – Button or context menu for adding/removing spline nodes.  
-   - **Gradient type selector** – Dropdown or buttons for switching between gradient types.  
-   - **Color adjustment** – Color picker for editing color stops.  
-   - **Blend slider** – To control transition smoothness.  
-   - **Animation controls** – Start/stop buttons, speed input, and cycle mode toggle.  
+### **5. Color Blending**  
+- Colors should transition smoothly between nodes using a blending algorithm:  
+   - Linear interpolation for neighboring nodes.  
+   - Adaptive smoothing based on the distance between nodes.  
+   - Option to adjust the blending sharpness using a slider.  
 
 ---
 
-### **6. Performance**  
-- The gradient and animation should maintain smooth rendering at **60 FPS**.  
-- Memory and performance should scale based on the number of nodes and color stops.  
-- GPU acceleration should be enabled where possible to optimize rendering.  
+### **6. UI/UX Controls**  
+- UI should provide the following controls:  
+   - **Row/Column count** – Input fields to adjust the mesh grid size.  
+   - **Select Node** – Tap or click to select a node.  
+   - **Color Picker** – Assign a color to the selected node.  
+   - **Position Adjustment** – Drag nodes within the mesh grid.  
+   - **Visibility Toggle** – Show/hide the mesh grid and node handles.  
+   - **Animation Controls** – Start/stop buttons, speed input, and cycle mode toggle.  
+
+---
+
+### **7. Performance**  
+- The gradient mesh should maintain smooth rendering at **60 FPS**.  
+- Mesh updates and animations should remain responsive even with large grid sizes.  
+- GPU acceleration should be enabled to optimize performance.
