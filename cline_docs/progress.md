@@ -4,7 +4,7 @@
 
 **Project Phase**: Phase 1 - Core Setup (Completed)
 
-The project has completed Phase 1 (Core Setup). We have initialized the Vue.js project with Vite, installed all required dependencies, set up the project structure, created basic component skeletons, and implemented basic routing. The development server is running, and we're ready to move on to Phase 2 (P5.js Integration).
+The project has completed Phase 1 (Core Setup). We have initialized the Vue.js project with Vite, installed all required dependencies, set up the project structure, created basic component skeletons, and implemented basic routing. The development server is running, and we're ready to move on to Phase 2 (P5.js Integration) with expanded gradient feature requirements.
 
 ```mermaid
 gantt
@@ -53,34 +53,58 @@ The following has been completed:
 
 - [ ] Create P5.js instance in Vue component
 - [ ] Implement canvas resizing
-- [ ] Set up basic animation loop
-- [ ] Create simple gradient rendering
+- [ ] Set up animation loop with consistent timing
+- [ ] Create gradient rendering with spline path support
 
-### Phase 3: State Management
+### Phase 3: Gradient Types Implementation
+
+- [ ] Implement linear gradient type
+- [ ] Implement radial gradient type
+- [ ] Implement shaped gradient type (following spline path)
+- [ ] Add UI for switching between gradient types
+
+### Phase 4: Spline Path Editing
+
+- [ ] Implement node creation, deletion, and dragging
+- [ ] Create dynamic spline recalculation
+- [ ] Add UI for spline path editing
+
+### Phase 5: Color Management
+
+- [ ] Implement multiple color stops with position control
+- [ ] Add color blending with smoothness control
+- [ ] Create real-time gradient updates when colors change
+
+### Phase 6: State Management
 
 - ✅ Set up Pinia stores
 - ✅ Implement gradient color step management
 - ✅ Implement animation settings management
 - [ ] Add state persistence
+- [ ] Connect the gradient rendering to the Pinia stores
+- [ ] Implement reactivity between UI controls and visualization
 
-### Phase 4: UI Development
+### Phase 7: UI Development
 
 - ✅ Create sliding drawer component
 - ✅ Implement color picker controls
 - ✅ Add animation speed controls
 - ✅ Design and implement UI for adding/removing color steps
+- [ ] Add UI for spline node editing
+- [ ] Implement gradient type selector
+- [ ] Add blend/smoothness slider
 
-### Phase 5: Advanced Features
+### Phase 8: Performance Optimization
 
-- [ ] Implement undulating animation effects
-- [ ] Add gradient interpolation with multiple color steps
-- [ ] Optimize performance for smooth animations
+- [ ] Optimize for 60 FPS animations
+- [ ] Implement GPU acceleration where possible
+- [ ] Optimize memory usage for complex gradients
 - [ ] Implement responsive design for mobile devices
 
-### Phase 6: Testing and Deployment
+### Phase 9: Testing and Deployment
 
 - [ ] Perform cross-browser testing
-- [ ] Optimize for performance
+- [ ] Test on various screen sizes and devices
 - [ ] Create production build
 - [ ] Deploy to hosting platform
 
@@ -94,10 +118,14 @@ The following has been completed:
 | Drawer UI | Completed | Basic drawer component created |
 | Color Controls | Completed | Basic color controls component created |
 | Animation Controls | Completed | Basic animation controls component created |
-| Gradient Rendering | Not Started | Will implement in Phase 2 |
-| Animation Effects | Not Started | Advanced feature for later phases |
+| Gradient Rendering | Not Started | Will implement in Phase 2 with spline support |
+| Spline Path Editing | Not Started | Will implement in Phase 4 |
+| Gradient Types | Not Started | Will implement linear, radial, and shaped types in Phase 3 |
+| Color Management | Not Started | Will implement multiple color stops and blending in Phase 5 |
+| Animation Effects | Not Started | Will implement color cycling along paths |
 | Responsive Design | In Progress | Basic responsive layout implemented |
 | State Persistence | Not Started | Will implement after basic functionality |
+| Performance Optimization | Not Started | Will target 60 FPS with GPU acceleration |
 
 ## Known Issues
 
@@ -120,17 +148,21 @@ As development has not yet begun, there are no known issues at this time. This s
 
 1. Implement P5.js instance in the GradientCanvas component
 2. Set up canvas resizing to be responsive to window size changes
-3. Implement basic animation loop
-4. Create simple gradient rendering
-5. Connect the gradient rendering to the Pinia stores
+3. Implement animation loop with consistent timing
+4. Create gradient rendering with spline path support
+5. Begin implementation of different gradient types (linear, radial, shaped)
+6. Start designing the spline path editing interface
 
 ## Blockers and Challenges
 
 No blockers have been identified at this early stage. Potential challenges that may arise include:
 
 1. Integrating P5.js effectively within Vue's component lifecycle
-2. Ensuring smooth performance during gradient animations
-3. Managing complex state for multiple color steps
-4. Implementing responsive design for the canvas
+2. Implementing efficient spline path calculations and rendering
+3. Ensuring smooth 60 FPS performance during gradient animations
+4. Managing complex state for multiple color stops and gradient types
+5. Creating an intuitive UI for spline node editing
+6. Implementing GPU acceleration for optimal performance
+7. Handling touch interactions for mobile spline editing
 
 These challenges will be addressed as development progresses.
