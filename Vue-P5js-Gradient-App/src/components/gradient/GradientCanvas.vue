@@ -39,6 +39,11 @@ defineExpose({
   emitter
 })
 
+// Helper function to check if we're using WebGL mode
+const isUsingWebGL = (): boolean => {
+  return p5Instance?.drawingContext instanceof WebGLRenderingContext || false
+}
+
 // Initialize mesh nodes
 const initializeMeshNodes = () => {
   // Clear existing nodes
@@ -54,8 +59,8 @@ const initializeMeshNodes = () => {
       const normalizedY = row / (rows - 1)
       
       // Calculate actual pixel position
-      const x = normalizedX * width.value
-      const y = normalizedY * height.value
+      let x = normalizedX * width.value
+      let y = normalizedY * height.value
       
       // Generate a color based on position
       const color = getColorForPosition(normalizedX, normalizedY)
@@ -103,7 +108,7 @@ const getColorForPosition = (normalizedX: number, normalizedY: number): string =
     const color = getInterpolatedColorForPosition(normalizedX, normalizedY, blendSettings.value.smoothness)
     
     // Convert p5.Color to hex string
-    return `#${p5Instance.hex(color, 6).substring(2)}`
+    return `rgb(${p5Instance.red(color)}, ${p5Instance.green(color)}, ${p5Instance.blue(color)})`
   } catch (error) {
     // Fallback color if there's an error
     return `hsl(${normalizedX * 360}, 80%, 50%)`
@@ -254,15 +259,41 @@ const interpolateColors = (colorStops: ColorStop[], t: number, smoothness: numbe
 }
 
 
+// Configuration for gradient rendering
+const renderConfig = ref({
+  // Resolution multiplier for gradient rendering (higher = smoother gradients but lower performance)
+  resolutionMultiplier: 2,
+  // Use WebGL for hardware acceleration when available
+  useWebGL: true
+})
+
 // P5.js sketch function
 const sketch = (p: p5) => {
   p.setup = () => {
-    p.createCanvas(width.value, height.value)
+    // Try to use WebGL mode if enabled in config
+    if (renderConfig.value.useWebGL) {
+      try {
+        p.createCanvas(width.value, height.value, p.WEBGL)
+        console.log('Using WebGL renderer for hardware acceleration')
+      } catch (e) {
+        console.warn('WebGL not supported, falling back to 2D renderer', e)
+        p.createCanvas(width.value, height.value)
+      }
+    } else {
+      p.createCanvas(width.value, height.value)
+    }
+    
+    // Position the camera to look at the center of the canvas from above
+    p.camera(width.value/2, height.value/2, 800, width.value/2, height.value/2, 0, 0, 1, 0)
+
     p.colorMode(p.RGB)
     p.strokeWeight(2)
     
     // Initialize mesh nodes after p5 is set up
-    initializeMeshNodes()
+    // Use setTimeout to ensure the canvas is fully initialized
+    setTimeout(() => {
+      initializeMeshNodes()
+    }, 0)
   }
 
   p.draw = () => {
@@ -279,14 +310,17 @@ const sketch = (p: p5) => {
     }
   }
   
-  // Draw the mesh gradient using triangles with optimized node lookup
+  // Draw the mesh gradient using a higher resolution grid for smoother transitions
   const drawMeshGradient = (p: p5) => {
     if (meshNodes.value.length < 4) return
     
     // Use the computed grid for faster node lookup
     const grid = meshNodeGrid.value;
     
-    // For each cell in the mesh grid (defined by 4 nodes), draw 2 triangles
+    // Get the resolution multiplier for smoother gradients
+    const resolution = renderConfig.value.resolutionMultiplier;
+    
+    // For each cell in the mesh grid (defined by 4 nodes)
     for (let row = 0; row < meshRows.value - 1; row++) {
       for (let col = 0; col < meshColumns.value - 1; col++) {
         // Get the 4 nodes that define this cell
@@ -296,37 +330,190 @@ const sketch = (p: p5) => {
         const bottomRight = grid[row + 1]?.[col + 1];
         
         if (topLeft && topRight && bottomLeft && bottomRight) {
-          // Draw first triangle (top-left, bottom-left, top-right)
-          p.noStroke()
-          p.beginShape(p.TRIANGLES)
-          
-          p.fill(p.color(topLeft.color))
-          p.vertex(topLeft.x, topLeft.y)
-          
-          p.fill(p.color(bottomLeft.color))
-          p.vertex(bottomLeft.x, bottomLeft.y)
-          
-          p.fill(p.color(topRight.color))
-          p.vertex(topRight.x, topRight.y)
-          
-          p.endShape()
-          
-          // Draw second triangle (bottom-left, bottom-right, top-right)
-          p.beginShape(p.TRIANGLES)
-          
-          p.fill(p.color(bottomLeft.color))
-          p.vertex(bottomLeft.x, bottomLeft.y)
-          
-          p.fill(p.color(bottomRight.color))
-          p.vertex(bottomRight.x, bottomRight.y)
-          
-          p.fill(p.color(topRight.color))
-          p.vertex(topRight.x, topRight.y)
-          
-          p.endShape()
+          // Create a higher resolution grid within this cell for smoother gradients
+          drawSmoothGradientQuad(
+            p, 
+            topLeft, 
+            topRight, 
+            bottomLeft, 
+            bottomRight, 
+            resolution
+          );
         }
       }
     }
+  }
+  
+  // Draw a smooth gradient quad using a higher resolution grid
+  const drawSmoothGradientQuad = (
+    p: p5, 
+    topLeft: MeshNode, 
+    topRight: MeshNode, 
+    bottomLeft: MeshNode, 
+    bottomRight: MeshNode, 
+    resolution: number
+  ) => {
+    p.noStroke();
+    
+    // Convert node colors to p5.Color objects
+    const colorTopLeft = p.color(topLeft.color);
+    const colorTopRight = p.color(topRight.color);
+    const colorBottomLeft = p.color(bottomLeft.color);
+    const colorBottomRight = p.color(bottomRight.color);
+    
+    // Create a higher resolution grid within this quad
+    for (let i = 0; i < resolution; i++) {
+      for (let j = 0; j < resolution; j++) {
+        // Calculate normalized positions within the quad (0-1)
+        const tx1 = j / resolution;
+        const ty1 = i / resolution;
+        const tx2 = (j + 1) / resolution;
+        const ty2 = i / resolution;
+        const tx3 = j / resolution;
+        const ty3 = (i + 1) / resolution;
+        const tx4 = (j + 1) / resolution;
+        const ty4 = (i + 1) / resolution;
+        
+        // Apply easing to the interpolation factors based on smoothness
+        const easedTx1 = applyEasing(tx1, blendSettings.value.smoothness);
+        const easedTy1 = applyEasing(ty1, blendSettings.value.smoothness);
+        const easedTx2 = applyEasing(tx2, blendSettings.value.smoothness);
+        const easedTy2 = applyEasing(ty2, blendSettings.value.smoothness);
+        const easedTx3 = applyEasing(tx3, blendSettings.value.smoothness);
+        const easedTy3 = applyEasing(ty3, blendSettings.value.smoothness);
+        const easedTx4 = applyEasing(tx4, blendSettings.value.smoothness);
+        const easedTy4 = applyEasing(ty4, blendSettings.value.smoothness);
+        
+        // Calculate the position of this sub-quad using the eased values
+        // Interpolate between the four corners of the quad
+        const x1 = p.lerp(
+          p.lerp(topLeft.x, topRight.x, easedTx1),
+          p.lerp(bottomLeft.x, bottomRight.x, easedTx1),
+          easedTy1
+        );
+        const y1 = p.lerp(
+          p.lerp(topLeft.y, topRight.y, easedTx1),
+          p.lerp(bottomLeft.y, bottomRight.y, easedTx1),
+          easedTy1
+        );
+        
+        const x2 = p.lerp(
+          p.lerp(topLeft.x, topRight.x, easedTx2),
+          p.lerp(bottomLeft.x, bottomRight.x, easedTx2),
+          easedTy2
+        );
+        const y2 = p.lerp(
+          p.lerp(topLeft.y, topRight.y, easedTx2),
+          p.lerp(bottomLeft.y, bottomRight.y, easedTx2),
+          easedTy2
+        );
+        
+        const x3 = p.lerp(
+          p.lerp(topLeft.x, topRight.x, easedTx3),
+          p.lerp(bottomLeft.x, bottomRight.x, easedTx3),
+          easedTy3
+        );
+        const y3 = p.lerp(
+          p.lerp(topLeft.y, topRight.y, easedTx3),
+          p.lerp(bottomLeft.y, bottomRight.y, easedTx3),
+          easedTy3
+        );
+        
+        const x4 = p.lerp(
+          p.lerp(topLeft.x, topRight.x, easedTx4),
+          p.lerp(bottomLeft.x, bottomRight.x, easedTx4),
+          easedTy4
+        );
+        const y4 = p.lerp(
+          p.lerp(topLeft.y, topRight.y, easedTx4),
+          p.lerp(bottomLeft.y, bottomRight.y, easedTx4),
+          easedTy4
+        );
+        
+        // Calculate the colors at each corner of this sub-quad using the same easing
+        const c1 = bilinearInterpolate(
+          tx1, 
+          ty1, 
+          colorTopLeft, 
+          colorTopRight, 
+          colorBottomLeft, 
+          colorBottomRight,
+          blendSettings.value.smoothness
+        );
+        
+        const c2 = bilinearInterpolate(
+          tx2, 
+          ty2, 
+          colorTopLeft, 
+          colorTopRight, 
+          colorBottomLeft, 
+          colorBottomRight,
+          blendSettings.value.smoothness
+        );
+        
+        const c3 = bilinearInterpolate(
+          tx3, 
+          ty3, 
+          colorTopLeft, 
+          colorTopRight, 
+          colorBottomLeft, 
+          colorBottomRight,
+          blendSettings.value.smoothness
+        );
+        
+        const c4 = bilinearInterpolate(
+          tx4, 
+          ty4, 
+          colorTopLeft, 
+          colorTopRight, 
+          colorBottomLeft, 
+          colorBottomRight,
+          blendSettings.value.smoothness
+        );
+        
+        // Draw the first triangle of this sub-quad
+        p.beginShape(p.TRIANGLES);
+        p.fill(c1);
+        p.vertex(x1, y1);
+        p.fill(c3);
+        p.vertex(x3, y3);
+        p.fill(c2);
+        p.vertex(x2, y2);
+        p.endShape();
+        
+        // Draw the second triangle of this sub-quad
+        p.beginShape(p.TRIANGLES);
+        p.fill(c3);
+        p.vertex(x3, y3);
+        p.fill(c4);
+        p.vertex(x4, y4);
+        p.fill(c2);
+        p.vertex(x2, y2);
+        p.endShape();
+      }
+    }
+  }
+  
+  // Bilinear interpolation for smooth color blending
+  const bilinearInterpolate = (
+    tx: number, 
+    ty: number, 
+    colorTopLeft: p5.Color, 
+    colorTopRight: p5.Color, 
+    colorBottomLeft: p5.Color, 
+    colorBottomRight: p5.Color,
+    smoothness: number
+  ): p5.Color => {
+    // Apply easing to the interpolation factors
+    const easedTx = applyEasing(tx, smoothness);
+    const easedTy = applyEasing(ty, smoothness);
+    
+    // Interpolate along the top and bottom edges
+    const colorTop = p.lerpColor(colorTopLeft, colorTopRight, easedTx);
+    const colorBottom = p.lerpColor(colorBottomLeft, colorBottomRight, easedTx);
+    
+    // Interpolate between top and bottom
+    return p.lerpColor(colorTop, colorBottom, easedTy);
   }
   
   
@@ -392,17 +579,29 @@ const sketch = (p: p5) => {
     return false // Prevent default touch behavior
   }
 
-  p.mousePressed = (event) => {
+  // Helper function to get mouse coordinates that work with the camera setup
+  const getAdjustedMouseCoords = () => {
+    // With the camera() function, mouse coordinates work directly in WebGL mode
+    // No adjustment needed as the camera is positioned to maintain the coordinate system
+    return {
+      x: p.mouseX,
+      y: p.mouseY
+    }
+  }
+
+  p.mousePressed = (event?: MouseEvent) => {
     // Check if the click is on a color picker or other drawer element
-    const target = event.target as HTMLElement
-    if (target && (
-      target.classList.contains('color-picker-large') || 
-      target.classList.contains('color-text-input') ||
-      target.classList.contains('color-preview-large') ||
-      target.closest('.drawer-open')
-    )) {
-      console.log('Ignoring canvas click because it was on a drawer element', target)
-      return
+    if (event && event.target) {
+      const target = event.target as HTMLElement
+      if (target && (
+        target.classList.contains('color-picker-large') || 
+        target.classList.contains('color-text-input') ||
+        target.classList.contains('color-preview-large') ||
+        target.closest('.drawer-open')
+      )) {
+        console.log('Ignoring canvas click because it was on a drawer element', target)
+        return
+      }
     }
     
     // If interacting with drawer, don't process the click
@@ -411,9 +610,12 @@ const sketch = (p: p5) => {
       return
     }
     
+    // Get adjusted mouse coordinates
+    const { x: mouseX, y: mouseY } = getAdjustedMouseCoords()
+    
     // Check if mouse is over a mesh node
     for (const node of meshNodes.value) {
-      const d = p.dist(p.mouseX, p.mouseY, node.x, node.y)
+      const d = p.dist(mouseX, mouseY, node.x, node.y)
       if (d < 10) {
         gradientStore.selectNode(node.id)
         draggingNodeId = node.id
@@ -429,9 +631,12 @@ const sketch = (p: p5) => {
   p.mouseDragged = () => {
     // Move the selected mesh node
     if (draggingNodeId !== null) {
+      // Get adjusted mouse coordinates
+      const { x: mouseX, y: mouseY } = getAdjustedMouseCoords()
+      
       gradientStore.updateMeshNode(draggingNodeId, {
-        x: p.mouseX,
-        y: p.mouseY,
+        x: mouseX,
+        y: mouseY,
         manuallyMoved: true
       })
     }
@@ -442,7 +647,13 @@ const sketch = (p: p5) => {
   }
 
   p.windowResized = () => {
+    // Resize the canvas
     p.resizeCanvas(width.value, height.value)
+    
+    // Reset the camera position for the new canvas size
+    if (p.drawingContext instanceof WebGLRenderingContext) {
+      p.camera(width.value/2, height.value/2, 800, width.value/2, height.value/2, 0, 0, 1, 0)
+    }
     
     // Recalculate mesh node positions on resize
     for (const node of meshNodes.value) {
