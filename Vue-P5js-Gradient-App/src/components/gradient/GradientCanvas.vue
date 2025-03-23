@@ -520,7 +520,7 @@ const sketch = (p: p5) => {
   const drawMeshGrid = (p: p5) => {
     p.stroke(200)
     p.strokeWeight(1)
-    
+    p.noFill()
     // Use the computed grid for faster node lookup
     const grid = meshNodeGrid.value;
     
