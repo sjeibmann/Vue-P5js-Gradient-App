@@ -18,29 +18,29 @@ const selectedNodeColor = computed(() => {
   return selectedNode?.color || '#ff0000'
 })
 
-// Add a new color stop
-const addColorStop = () => {
-  gradientStore.addColorStop('#00ff00') // Default to green
-}
-
-// Remove a color stop
-const removeColorStop = (id: number) => {
-  gradientStore.removeColorStop(id)
-}
-
-// Update a color stop
-const updateColor = (id: number, color: string) => {
-  gradientStore.updateColorStop(id, { color })
-}
-
 // Update mesh node color
 const updateMeshNodeColor = (id: number, color: string) => {
-  gradientStore.updateMeshNode(id, { color })
+  console.log(`Updating node ${id} color to ${color}`)
+  if (id !== null) {
+    gradientStore.updateMeshNode(id, { color })
+  }
 }
 
-// Update position
-const updatePosition = (id: number, position: number) => {
-  gradientStore.updateColorStop(id, { position })
+// Handle color picker change
+const handleColorChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const color = target.value
+  console.log(`Color picker changed to ${color}`)
+  
+  if (selectedNodeId.value !== null) {
+    // Find the node directly in the array
+    const nodeIndex = meshNodes.value.findIndex(node => node.id === selectedNodeId.value)
+    if (nodeIndex !== -1) {
+      // Update the node color directly
+      meshNodes.value[nodeIndex].color = color
+      console.log(`Updated node ${selectedNodeId.value} color to ${color} directly`)
+    }
+  }
 }
 
 // Update blend smoothness
@@ -63,23 +63,48 @@ const gridTemplateStyle = computed(() => {
 </script>
 
 <template>
-  <div class="color-controls">
-    <!-- Selected Node Editor -->
-    <div v-if="isMeshNodeSelected" class="mesh-node-editor">
-      <div class="mesh-node-header">
-        <h4>Selected Node: {{ selectedNodeId }}</h4>
-        <p>Edit the selected node's color:</p>
-      </div>
+  <div class="mesh-node-controls">
+    <!-- Color Editor -->
+    <div class="color-editor" @click.stop>
+      <h3 class="editor-title">Node Color</h3>
       
-      <div class="mesh-node-color">
-        <div class="color-preview" :style="{ backgroundColor: selectedNodeColor }"></div>
-        <input 
-          type="color" 
-          :value="selectedNodeColor" 
-          @input="(e) => updateMeshNodeColor(selectedNodeId, (e.target as HTMLInputElement).value)" 
-          class="node-color-picker"
-        />
-        <div class="node-instructions">
+      <div class="color-editor-content" :class="{ 'disabled': !isMeshNodeSelected }">
+        <div class="color-selection" @click.stop>
+          <div 
+            class="color-preview-large" 
+            :style="{ backgroundColor: selectedNodeColor }"
+            @click.stop
+          ></div>
+          
+          <div class="color-inputs">
+            <input 
+              type="color" 
+              :value="selectedNodeColor" 
+              @input="handleColorChange" 
+              @click.stop
+              class="color-picker-large"
+              :disabled="!isMeshNodeSelected"
+            />
+            
+            <input 
+              type="text" 
+              :value="selectedNodeColor" 
+              @input="handleColorChange" 
+              @click.stop
+              class="color-text-input"
+              :disabled="!isMeshNodeSelected"
+              placeholder="Select a node"
+              maxlength="7"
+              pattern="#[0-9A-Fa-f]{6}"
+            />
+          </div>
+        </div>
+        
+        <p class="selection-status" @click.stop>
+          {{ isMeshNodeSelected ? `Node ${selectedNodeId} selected` : 'Select a node from the grid below' }}
+        </p>
+        
+        <div v-if="isMeshNodeSelected" class="node-instructions" @click.stop>
           <p>Click and drag the node to adjust its position</p>
           <p>Use the color picker to change the node color</p>
         </div>
@@ -87,7 +112,7 @@ const gridTemplateStyle = computed(() => {
     </div>
     
     <!-- Blend Settings -->
-    <div class="blend-settings">
+    <div class="blend-settings" @click.stop>
       <label>Blend Smoothness:</label>
       <input 
         type="range" 
@@ -95,7 +120,8 @@ const gridTemplateStyle = computed(() => {
         max="1" 
         step="0.01" 
         :value="blendSettings.smoothness" 
-        @input="(e) => updateSmoothness(parseFloat((e.target as HTMLInputElement).value))" 
+        @input="(e) => updateSmoothness(parseFloat((e.target as HTMLInputElement).value))"
+        @click.stop
         class="smoothness-slider"
       />
       <span>{{ Math.round(blendSettings.smoothness * 100) }}%</span>
@@ -116,122 +142,99 @@ const gridTemplateStyle = computed(() => {
         <div class="mesh-node-color" :style="{ backgroundColor: node.color }"></div>
       </div>
     </div>
-    
-    <!-- Color Stops section removed as requested -->
   </div>
 </template>
 
 <style scoped>
-.color-controls {
+.mesh-node-controls {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-.color-step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.color-preview {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-.color-picker {
-  width: 40px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-
-.position-slider {
-  flex: 1;
-}
-
-.remove-button {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background-color: #f44336;
-  color: white;
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.remove-button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-.add-button {
-  margin-top: 10px;
-  padding: 8px 16px;
-  background-color: #4caf50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.add-button:hover {
-  background-color: #45a049;
-}
-
-.mesh-node-editor {
-  background-color: #f5f5f5;
+/* Color Editor */
+.color-editor {
+  background-color: white;
   border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 15px;
+  padding: 15px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
 }
 
-.mesh-node-header h4 {
-  margin-top: 0;
-  margin-bottom: 8px;
-  color: #2e7d32;
+.color-editor-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
 
-.mesh-node-header p {
-  /* margin: 0 0 10px 0; */
-  font-size: 0.9em;
+.color-editor-content.disabled {
+  opacity: 0.7;
 }
 
-.mesh-node-color {
+.color-selection {
   display: flex;
   align-items: center;
+  gap: 15px;
+}
+
+.color-preview-large {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.color-inputs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-.node-color-picker {
-  width: 60px;
-  height: 30px;
+.color-picker-large {
+  width: 100%;
+  height: 40px;
   padding: 0;
   border: 1px solid #ccc;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.color-text-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.selection-status {
+  text-align: center;
+  font-size: 0.9em;
+  color: #666;
+  margin: 5px 0 0 0;
 }
 
 .node-instructions {
   font-size: 0.9em;
   color: #666;
-  margin-left: 10px;
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 4px;
 }
 
 .node-instructions p {
   margin: 0 0 5px 0;
 }
 
-/* Section Titles */
+/* Titles */
+.editor-title {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+  color: #333;
+}
+
 .section-title {
   margin-top: 20px;
   margin-bottom: 10px;
@@ -305,13 +308,5 @@ const gridTemplateStyle = computed(() => {
 .smoothness-slider {
   flex: 1;
   margin: 0 10px;
-}
-
-/* Position Value */
-.position-value {
-  min-width: 40px;
-  text-align: right;
-  font-size: 0.9em;
-  color: #666;
 }
 </style>

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import ColorControls from './ColorControls.vue'
-import AnimationControls from './AnimationControls.vue'
+import MeshNodeControls from './MeshNodeControls.vue'
+import MeshControls from './MeshControls.vue'
+import { useGradientStore } from '@/stores/gradient'
+
+// Get store
+const gradientStore = useGradientStore()
 
 // Props
 interface Props {
@@ -9,6 +13,23 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits(['mousedown', 'mouseup', 'mouseleave'])
+
+// Handle mouse events
+const handleMouseDown = (e: MouseEvent) => {
+  emit('mousedown', e)
+  e.stopPropagation()
+}
+
+const handleMouseUp = (e: MouseEvent) => {
+  emit('mouseup', e)
+  e.stopPropagation()
+}
+
+const handleMouseLeave = (e: MouseEvent) => {
+  emit('mouseleave', e)
+  e.stopPropagation()
+}
 
 // Computed
 const drawerClass = computed(() => ({
@@ -18,18 +39,26 @@ const drawerClass = computed(() => ({
 </script>
 
 <template>
-  <div :class="drawerClass">
-    <div class="drawer-content">
+  <div 
+    :class="drawerClass" 
+    @mousedown="handleMouseDown"
+    @mouseup="handleMouseUp"
+    @mouseleave="handleMouseLeave"
+  >
+    <div 
+      class="drawer-content" 
+      @mousedown="handleMouseDown"
+      @mouseup="handleMouseUp"
+      @mouseleave="handleMouseLeave"
+    >
       <h2 class="drawer-title">Gradient Controls</h2>
       
       <div class="drawer-section">
-        <h3>Colors</h3>
-        <ColorControls />
+        <MeshNodeControls />
       </div>
       
       <div class="drawer-section">
-        <h3>Animation</h3>
-        <AnimationControls />
+        <MeshControls />
       </div>
     </div>
   </div>
@@ -39,8 +68,8 @@ const drawerClass = computed(() => ({
 .drawer {
   position: fixed;
   top: 0;
-  right: -320px;
-  width: 320px;
+  right: -360px;
+  width: 360px;
   height: 100vh;
   background-color: rgba(255, 255, 255, 0.9);
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);

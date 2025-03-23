@@ -20,6 +20,6 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  /* overflow: hidden; */
 }
 </style>

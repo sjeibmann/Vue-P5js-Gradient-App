@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, inject } from 'vue'
 import p5 from 'p5'
 import { useWindowSize } from '@vueuse/core'
-import { useGradientStore } from '@/stores/gradient'
-import { useAnimationStore } from '@/stores/animation'
+import mitt from 'mitt'
+import { useGradientStore, type ColorStop, type MeshNode } from '@/stores/gradient'
+import { storeToRefs } from 'pinia'
 
 const canvasContainer = ref<HTMLElement | null>(null)
 let p5Instance: p5 | null = null
@@ -11,35 +12,458 @@ let p5Instance: p5 | null = null
 // Get reactive window size
 const { width, height } = useWindowSize()
 
-// Get stores
+// Get store
 const gradientStore = useGradientStore()
-const animationStore = useAnimationStore()
+
+// Get reactive store properties
+const { colorStops, blendSettings, meshRows, meshColumns, meshVisibility, selectedNodeId, meshNodes } = storeToRefs(gradientStore)
+
+// Track dragging state
+let draggingNodeId: number | null = null
+
+// Get the drawer interaction flag from the parent component
+const isInteractingWithDrawer = inject('isInteractingWithDrawer', ref(false))
+
+// Create a custom event bus for mesh node color updates
+const emitter = mitt<{
+  'update-mesh-node-color': { id: number; color: string }
+}>()
+
+// Listen for color update events
+emitter.on('update-mesh-node-color', ({ id, color }) => {
+  gradientStore.updateMeshNode(id, { color })
+})
+
+// Expose the emitter to the parent component
+defineExpose({ 
+  emitter
+})
+
+// Initialize mesh nodes
+const initializeMeshNodes = () => {
+  // Clear existing nodes
+  gradientStore.clearMeshNodes()
+  
+  const rows = meshRows.value
+  const cols = meshColumns.value
+  
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      // Calculate normalized position (0-1)
+      const normalizedX = col / (cols - 1)
+      const normalizedY = row / (rows - 1)
+      
+      // Calculate actual pixel position
+      const x = normalizedX * width.value
+      const y = normalizedY * height.value
+      
+      // Generate a color based on position
+      const color = getColorForPosition(normalizedX, normalizedY)
+      
+      gradientStore.addMeshNode({
+        id: row * cols + col,
+        row,
+        col,
+        x,
+        y,
+        color
+      })
+    }
+  }
+}
+
+// Create a more efficient data structure for node lookup
+const meshNodeGrid = computed(() => {
+  const grid: (MeshNode | null)[][] = Array(meshRows.value)
+    .fill(null)
+    .map(() => Array(meshColumns.value).fill(null));
+  
+  for (const node of meshNodes.value) {
+    if (node.row >= 0 && node.row < meshRows.value && 
+        node.col >= 0 && node.col < meshColumns.value) {
+      grid[node.row][node.col] = node;
+    }
+  }
+  
+  return grid;
+});
+
+// Get color for a position in the mesh using bilinear interpolation
+const getColorForPosition = (normalizedX: number, normalizedY: number): string => {
+  if (p5Instance === null) {
+    // If p5Instance is not initialized, return a default color based on position
+    const r = Math.floor(normalizedX * 255)
+    const g = Math.floor(normalizedY * 255)
+    const b = Math.floor((1 - normalizedX) * 255)
+    return `rgb(${r}, ${g}, ${b})`
+  }
+  
+  try {
+    // Use both X and Y positions for 2D color interpolation
+    const color = getInterpolatedColorForPosition(normalizedX, normalizedY, blendSettings.value.smoothness)
+    
+    // Convert p5.Color to hex string
+    return `#${p5Instance.hex(color, 6).substring(2)}`
+  } catch (error) {
+    // Fallback color if there's an error
+    return `hsl(${normalizedX * 360}, 80%, 50%)`
+  }
+}
+
+// Get interpolated color for a position using bilinear interpolation
+const getInterpolatedColorForPosition = (normalizedX: number, normalizedY: number, smoothness: number): p5.Color => {
+  if (p5Instance === null) throw new Error('P5 instance not initialized')
+  const p = p5Instance
+  
+  // For moved nodes, use distance-based interpolation
+  if (meshNodes.value.some(node => node.manuallyMoved)) {
+    return getDistanceBasedColor(normalizedX, normalizedY, smoothness);
+  }
+  
+  // For grid-aligned nodes, use bilinear interpolation
+  // Find the grid cell that contains this position
+  const cols = meshColumns.value - 1;
+  const rows = meshRows.value - 1;
+  
+  const colFloat = normalizedX * cols;
+  const rowFloat = normalizedY * rows;
+  
+  const col1 = Math.floor(colFloat);
+  const col2 = Math.min(col1 + 1, cols);
+  const row1 = Math.floor(rowFloat);
+  const row2 = Math.min(row1 + 1, rows);
+  
+  // Get the four corners of the cell
+  const grid = meshNodeGrid.value;
+  const topLeft = grid[row1]?.[col1];
+  const topRight = grid[row1]?.[col2];
+  const bottomLeft = grid[row2]?.[col1];
+  const bottomRight = grid[row2]?.[col2];
+  
+  if (!topLeft || !topRight || !bottomLeft || !bottomRight) {
+    // Fallback if any corner is missing
+    return interpolateColors(colorStops.value, normalizedX, smoothness);
+  }
+  
+  // Calculate interpolation factors with easing
+  const tx = applyEasing(colFloat - col1, smoothness);
+  const ty = applyEasing(rowFloat - row1, smoothness);
+  
+  // Bilinear interpolation
+  // First interpolate the top and bottom edges
+  const topColor = p.lerpColor(p.color(topLeft.color), p.color(topRight.color), tx);
+  const bottomColor = p.lerpColor(p.color(bottomLeft.color), p.color(bottomRight.color), tx);
+  
+  // Then interpolate between top and bottom
+  return p.lerpColor(topColor, bottomColor, ty);
+}
+
+// Get color based on distance to nearby nodes (for when nodes have been moved)
+const getDistanceBasedColor = (normalizedX: number, normalizedY: number, smoothness: number): p5.Color => {
+  if (p5Instance === null) throw new Error('P5 instance not initialized')
+  const p = p5Instance
+  
+  // Convert normalized coordinates to actual pixel positions
+  const x = normalizedX * width.value;
+  const y = normalizedY * height.value;
+  
+  // Calculate weighted sum of colors based on inverse distance
+  let totalWeight = 0;
+  const weightedColors: {color: p5.Color, weight: number}[] = [];
+  
+  // Consider all nodes, with closer nodes having more influence
+  for (const node of meshNodes.value) {
+    const dx = x - node.x;
+    const dy = y - node.y;
+    const distanceSquared = dx * dx + dy * dy;
+    
+    // Avoid division by zero and limit maximum influence
+    const minDistanceSquared = 100; // Minimum squared distance to avoid division by zero
+    const effectiveDistanceSquared = Math.max(distanceSquared, minDistanceSquared);
+    
+    // Weight is inverse to distance squared
+    const weight = 1 / effectiveDistanceSquared;
+    totalWeight += weight;
+    
+    weightedColors.push({
+      color: p.color(node.color),
+      weight: weight
+    });
+  }
+  
+  // Sort by weight (highest first) and take only the most influential nodes
+  weightedColors.sort((a, b) => b.weight - a.weight);
+  const topInfluencers = weightedColors.slice(0, 4); // Consider only the 4 closest nodes
+  
+  // Recalculate total weight for the top influencers
+  totalWeight = topInfluencers.reduce((sum, item) => sum + item.weight, 0);
+  
+  // Blend colors based on normalized weights
+  let r = 0, g = 0, b = 0;
+  for (const {color, weight} of topInfluencers) {
+    const normalizedWeight = weight / totalWeight;
+    r += p.red(color) * normalizedWeight;
+    g += p.green(color) * normalizedWeight;
+    b += p.blue(color) * normalizedWeight;
+  }
+  
+  return p.color(r, g, b);
+}
+
+// Apply easing function based on smoothness parameter
+const applyEasing = (t: number, smoothness: number): number => {
+  // Linear interpolation when smoothness is 0.5
+  if (Math.abs(smoothness - 0.5) < 0.01) return t;
+  
+  // Ease in when smoothness < 0.5 (sharper transitions)
+  if (smoothness < 0.5) {
+    const factor = 1 - smoothness * 2; // 0 to 1 as smoothness goes from 0.5 to 0
+    return Math.pow(t, 1 + factor * 2); // Stronger ease-in for lower smoothness
+  }
+  
+  // Ease out when smoothness > 0.5 (smoother transitions)
+  const factor = (smoothness - 0.5) * 2; // 0 to 1 as smoothness goes from 0.5 to 1
+  return 1 - Math.pow(1 - t, 1 + factor * 2); // Stronger ease-out for higher smoothness
+}
+
+// Helper function for color stops interpolation (used as fallback)
+const interpolateColors = (colorStops: ColorStop[], t: number, smoothness: number): p5.Color => {
+  if (p5Instance === null) throw new Error('P5 instance not initialized')
+  const p = p5Instance
+  
+  // Find the two color stops that t falls between
+  let start = colorStops[0]
+  let end = colorStops[colorStops.length - 1]
+  
+  for (let i = 0; i < colorStops.length - 1; i++) {
+    if (t >= colorStops[i].position && t <= colorStops[i + 1].position) {
+      start = colorStops[i]
+      end = colorStops[i + 1]
+      break
+    }
+  }
+  
+  // Normalize t to the range between these two stops
+  const normalizedT = (t - start.position) / (end.position - start.position) || 0
+  
+  // Apply easing based on smoothness
+  const easedT = applyEasing(normalizedT, smoothness)
+  
+  // Interpolate between the two colors
+  return p.lerpColor(p.color(start.color), p.color(end.color), easedT)
+}
+
 
 // P5.js sketch function
 const sketch = (p: p5) => {
   p.setup = () => {
     p.createCanvas(width.value, height.value)
-    p.colorMode(p.HSB, 360, 100, 100)
-    p.noStroke()
+    p.colorMode(p.RGB)
+    p.strokeWeight(2)
+    
+    // Initialize mesh nodes after p5 is set up
+    initializeMeshNodes()
   }
 
   p.draw = () => {
-    // Simple gradient for now - will be enhanced in later phases
-    const color1 = p.color('#ff0000') // Red
-    const color2 = p.color('#0000ff') // Blue
+    // Clear the background
+    p.background(255)
     
-    for (let y = 0; y < p.height; y++) {
-      const inter = y / p.height
-      const c = p.lerpColor(color1, color2, inter)
-      p.stroke(c)
-      p.line(0, y, p.width, y)
+    // Draw the mesh gradient
+    drawMeshGradient(p)
+    
+    // Draw mesh grid and nodes if visibility is enabled
+    if (meshVisibility.value) {
+      drawMeshGrid(p)
+      drawMeshNodes(p)
     }
+  }
+  
+  // Draw the mesh gradient using triangles with optimized node lookup
+  const drawMeshGradient = (p: p5) => {
+    if (meshNodes.value.length < 4) return
+    
+    // Use the computed grid for faster node lookup
+    const grid = meshNodeGrid.value;
+    
+    // For each cell in the mesh grid (defined by 4 nodes), draw 2 triangles
+    for (let row = 0; row < meshRows.value - 1; row++) {
+      for (let col = 0; col < meshColumns.value - 1; col++) {
+        // Get the 4 nodes that define this cell
+        const topLeft = grid[row]?.[col];
+        const topRight = grid[row]?.[col + 1];
+        const bottomLeft = grid[row + 1]?.[col];
+        const bottomRight = grid[row + 1]?.[col + 1];
+        
+        if (topLeft && topRight && bottomLeft && bottomRight) {
+          // Draw first triangle (top-left, bottom-left, top-right)
+          p.noStroke()
+          p.beginShape(p.TRIANGLES)
+          
+          p.fill(p.color(topLeft.color))
+          p.vertex(topLeft.x, topLeft.y)
+          
+          p.fill(p.color(bottomLeft.color))
+          p.vertex(bottomLeft.x, bottomLeft.y)
+          
+          p.fill(p.color(topRight.color))
+          p.vertex(topRight.x, topRight.y)
+          
+          p.endShape()
+          
+          // Draw second triangle (bottom-left, bottom-right, top-right)
+          p.beginShape(p.TRIANGLES)
+          
+          p.fill(p.color(bottomLeft.color))
+          p.vertex(bottomLeft.x, bottomLeft.y)
+          
+          p.fill(p.color(bottomRight.color))
+          p.vertex(bottomRight.x, bottomRight.y)
+          
+          p.fill(p.color(topRight.color))
+          p.vertex(topRight.x, topRight.y)
+          
+          p.endShape()
+        }
+      }
+    }
+  }
+  
+  
+  const drawMeshGrid = (p: p5) => {
+    p.stroke(200)
+    p.strokeWeight(1)
+    
+    // Use the computed grid for faster node lookup
+    const grid = meshNodeGrid.value;
+    
+    // Draw horizontal grid lines
+    for (let row = 0; row < meshRows.value; row++) {
+      p.beginShape()
+      for (let col = 0; col < meshColumns.value; col++) {
+        const node = grid[row]?.[col];
+        if (node) {
+          p.vertex(node.x, node.y)
+        }
+      }
+      p.endShape()
+    }
+    
+    // Draw vertical grid lines
+    for (let col = 0; col < meshColumns.value; col++) {
+      p.beginShape()
+      for (let row = 0; row < meshRows.value; row++) {
+        const node = grid[row]?.[col];
+        if (node) {
+          p.vertex(node.x, node.y)
+        }
+      }
+      p.endShape()
+    }
+  }
+  
+  const drawMeshNodes = (p: p5) => {
+    p.strokeWeight(1)
+    
+    for (const node of meshNodes.value) {
+      // Draw node
+      p.stroke(0)
+      // Check if this node is the selected node
+      const isSelected = node.id === selectedNodeId.value
+      p.fill(isSelected ? p.color(255, 0, 0) : p.color(node.color))
+      p.circle(node.x, node.y, 10)
+    }
+  }
+  
+  
+  // Mobile touch support
+  p.touchStarted = () => {
+    p.mousePressed()
+    return false // Prevent default touch behavior
+  }
+
+  p.touchMoved = () => {
+    p.mouseDragged()
+    return false // Prevent default touch behavior
+  }
+
+  p.touchEnded = () => {
+    p.mouseReleased()
+    return false // Prevent default touch behavior
+  }
+
+  p.mousePressed = (event) => {
+    // Check if the click is on a color picker or other drawer element
+    const target = event.target as HTMLElement
+    if (target && (
+      target.classList.contains('color-picker-large') || 
+      target.classList.contains('color-text-input') ||
+      target.classList.contains('color-preview-large') ||
+      target.closest('.drawer-open')
+    )) {
+      console.log('Ignoring canvas click because it was on a drawer element', target)
+      return
+    }
+    
+    // If interacting with drawer, don't process the click
+    if (isInteractingWithDrawer.value) {
+      console.log('Ignoring canvas click because drawer is being interacted with')
+      return
+    }
+    
+    // Check if mouse is over a mesh node
+    for (const node of meshNodes.value) {
+      const d = p.dist(p.mouseX, p.mouseY, node.x, node.y)
+      if (d < 10) {
+        gradientStore.selectNode(node.id)
+        draggingNodeId = node.id
+        return
+      }
+    }
+    
+    // If no node was clicked, deselect
+    gradientStore.selectNode(null)
+    draggingNodeId = null
+  }
+  
+  p.mouseDragged = () => {
+    // Move the selected mesh node
+    if (draggingNodeId !== null) {
+      gradientStore.updateMeshNode(draggingNodeId, {
+        x: p.mouseX,
+        y: p.mouseY,
+        manuallyMoved: true
+      })
+    }
+  }
+  
+  p.mouseReleased = () => {
+    draggingNodeId = null
   }
 
   p.windowResized = () => {
     p.resizeCanvas(width.value, height.value)
+    
+    // Recalculate mesh node positions on resize
+    for (const node of meshNodes.value) {
+      const normalizedX = node.col / (meshColumns.value - 1)
+      const normalizedY = node.row / (meshRows.value - 1)
+      
+      // Only update position if it hasn't been manually moved
+      if (!node.manuallyMoved) {
+        gradientStore.updateMeshNode(node.id, {
+          x: normalizedX * width.value,
+          y: normalizedY * height.value
+        })
+      }
+    }
   }
 }
+
+// Watch for changes in mesh configuration
+watch([meshRows, meshColumns], () => {
+  initializeMeshNodes()
+})
 
 onMounted(() => {
   if (canvasContainer.value) {
@@ -60,7 +484,7 @@ onUnmounted(() => {
 
 <style scoped>
 .canvas-container {
-  position: absolute;
+  position: relative;
   top: 0;
   left: 0;
   width: 100%;

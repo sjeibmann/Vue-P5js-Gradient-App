@@ -76,7 +76,7 @@ onUnmounted(() => {
 ### State Management
 
 - Use Pinia for global state management
-- Structure stores by domain (gradient, animation)
+- Structure stores by domain (gradient, animation, spline)
 - Use the `persist` option for state that should survive page refreshes
 - Watch store state in components to react to changes
 
@@ -86,20 +86,139 @@ import { useGradientStore } from '@/stores/gradient';
 import { storeToRefs } from 'pinia';
 
 const gradientStore = useGradientStore();
-const { colorSteps } = storeToRefs(gradientStore);
+const { colorStops, gradientType, blendSettings } = storeToRefs(gradientStore);
 
 // Watch for changes to update P5 sketch
-watch(colorSteps, () => {
+watch([colorStops, gradientType, blendSettings], () => {
   // Update visualization
 }, { deep: true });
 ```
 
-### Gradient Rendering
+### Spline Path Implementation
 
+- Use Catmull-Rom or Bézier splines for smooth path calculation
+- Implement node-based editing with drag-and-drop support
+- Store spline nodes in Pinia store for persistence
+- Recalculate spline path when nodes change
+
+```javascript
+// Example pattern for spline calculation
+function calculateSplinePath(nodes, splineType, resolution = 100) {
+  const points = [];
+  
+  if (splineType === 'catmull-rom') {
+    // Catmull-Rom implementation
+    for (let i = 0; i < nodes.length - 3; i++) {
+      for (let j = 0; j < resolution; j++) {
+        const t = j / resolution;
+        const point = catmullRomSpline(
+          nodes[i], 
+          nodes[i + 1], 
+          nodes[i + 2], 
+          nodes[i + 3], 
+          t
+        );
+        points.push(point);
+      }
+    }
+  } else if (splineType === 'bezier') {
+    // Bézier implementation
+    // ...
+  }
+  
+  return points;
+}
+```
+
+### Gradient Types
+
+- Implement three gradient types: linear, radial, and shaped
+- Allow dynamic switching between types without restarting animation
+- Use appropriate rendering technique for each type
+
+```javascript
+// Example pattern for gradient type rendering
+function renderGradient(p, gradientType, colorStops, splineNodes) {
+  switch (gradientType) {
+    case 'linear':
+      drawLinearGradient(p, colorStops, 0, 0, p.width, p.height);
+      break;
+    case 'radial':
+      drawRadialGradient(p, colorStops, p.width / 2, p.height / 2, p.width / 2);
+      break;
+    case 'shaped':
+      drawShapedGradient(p, colorStops, splineNodes, 'catmull-rom');
+      break;
+  }
+}
+```
+
+### Color Management
+
+- Support multiple color stops with position control
+- Implement color blending with smoothness control
 - Use P5.js `lerpColor()` for smooth color interpolation
 - Calculate gradient positions based on the current animation time
-- Use sine/cosine functions for undulating effects
 - Optimize by pre-calculating values when possible
+
+```javascript
+// Example pattern for color interpolation with multiple stops
+function interpolateColors(colorStops, t, smoothness = 0.5) {
+  // Find the two color stops that t falls between
+  let start = colorStops[0];
+  let end = colorStops[colorStops.length - 1];
+  
+  for (let i = 0; i < colorStops.length - 1; i++) {
+    if (t >= colorStops[i].position && t <= colorStops[i + 1].position) {
+      start = colorStops[i];
+      end = colorStops[i + 1];
+      break;
+    }
+  }
+  
+  // Normalize t to the range between these two stops
+  const normalizedT = (t - start.position) / (end.position - start.position);
+  
+  // Apply smoothness (easing function)
+  const easedT = applyEasing(normalizedT, smoothness);
+  
+  // Interpolate between the two colors
+  return p5.lerpColor(p.color(start.color), p.color(end.color), easedT);
+}
+```
+
+### Animation Implementation
+
+- Implement consistent timing using `deltaTime` or `millis()`
+- Support start/stop controls
+- Implement color cycling along paths
+- Use easing functions for smooth transitions
+
+```javascript
+// Example pattern for animation with consistent timing
+let lastTime = 0;
+let animationProgress = 0;
+
+p.draw = () => {
+  const currentTime = p.millis();
+  const deltaTime = currentTime - lastTime;
+  lastTime = currentTime;
+  
+  if (isPlaying) {
+    // Update animation progress based on deltaTime and speed
+    animationProgress += (deltaTime / 1000) * speed;
+    
+    // Ensure it loops between 0 and 1
+    animationProgress = animationProgress % 1;
+    
+    // Use animationProgress to update the visualization
+    // ...
+  }
+  
+  // Render the current state
+  renderGradient(p, gradientType, colorStops, splineNodes);
+};
+```
 
 ## Known Challenges
 
@@ -109,15 +228,31 @@ watch(colorSteps, () => {
 
 2. **Performance Optimization**:
    - Gradient animations can be CPU-intensive
-   - Solution: Limit unnecessary redraws, use appropriate frame rates
+   - Solution: Limit unnecessary redraws, use appropriate frame rates, enable GPU acceleration
 
 3. **Responsive Canvas**:
    - Canvas needs to resize with the window
    - Solution: Use `@vueuse/core` for reactive dimensions and P5's `windowResized()`
 
-4. **Multiple Color Steps**:
+4. **Multiple Color Stops**:
    - Interpolating between multiple colors is more complex than two colors
-   - Solution: Implement multi-step interpolation algorithm
+   - Solution: Implement multi-step interpolation algorithm with position-based blending
+
+5. **Spline Path Calculation**:
+   - Calculating smooth splines can be computationally expensive
+   - Solution: Cache calculated paths, only recalculate when nodes change
+
+6. **Touch Interaction for Spline Editing**:
+   - Mobile touch events require different handling than mouse events
+   - Solution: Implement touch event handlers with appropriate hit testing
+
+7. **Gradient Type Switching**:
+   - Switching between gradient types needs to maintain current colors and animation state
+   - Solution: Abstract gradient rendering from gradient type, share common state
+
+8. **60 FPS Performance Target**:
+   - Complex gradients and animations might impact performance
+   - Solution: Use WebGL mode when available, optimize rendering algorithms, implement adaptive complexity
 
 ## User Preferences
 

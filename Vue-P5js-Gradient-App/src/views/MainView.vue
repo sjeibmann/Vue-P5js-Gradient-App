@@ -1,18 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, provide } from 'vue'
 import GradientCanvas from '@/components/gradient/GradientCanvas.vue'
 import Drawer from '@/components/ui/Drawer.vue'
 
 const isDrawerOpen = ref(false)
+const canvasRef = ref<InstanceType<typeof GradientCanvas> | null>(null)
+const isInteractingWithDrawer = ref(false)
+
+// Provide this flag to child components
+provide('isInteractingWithDrawer', isInteractingWithDrawer)
 
 const toggleDrawer = () => {
   isDrawerOpen.value = !isDrawerOpen.value
+}
+
+// Function to set the interaction flag
+const setDrawerInteraction = (value: boolean) => {
+  isInteractingWithDrawer.value = value
+  console.log('Drawer interaction:', value)
 }
 </script>
 
 <template>
   <div class="main-view">
-    <GradientCanvas />
+    <GradientCanvas ref="canvasRef" />
     <button 
       class="drawer-toggle" 
       @click="toggleDrawer" 
@@ -20,7 +31,12 @@ const toggleDrawer = () => {
     >
       <span class="toggle-icon">{{ isDrawerOpen ? '›' : '‹' }}</span>
     </button>
-    <Drawer :is-open="isDrawerOpen" />
+    <Drawer 
+      :is-open="isDrawerOpen"
+      @mousedown="setDrawerInteraction(true)"
+      @mouseup="setDrawerInteraction(false)"
+      @mouseleave="setDrawerInteraction(false)"
+    />
   </div>
 </template>
 
@@ -29,7 +45,7 @@ const toggleDrawer = () => {
   position: relative;
   width: 100%;
   height: 100vh;
-  overflow: hidden;
+  /* overflow: hidden; */
 }
 
 .drawer-toggle {
@@ -47,7 +63,7 @@ const toggleDrawer = () => {
 }
 
 .drawer-toggle.drawer-open {
-  right: 320px;
+  right: 360px;
 }
 
 .toggle-icon {
