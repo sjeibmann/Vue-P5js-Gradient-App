@@ -262,7 +262,7 @@ const interpolateColors = (colorStops: ColorStop[], t: number, smoothness: numbe
 // Configuration for gradient rendering
 const renderConfig = ref({
   // Resolution multiplier for gradient rendering (higher = smoother gradients but lower performance)
-  resolutionMultiplier: 2,
+  resolutionMultiplier: 8,
   // Use WebGL for hardware acceleration when available
   useWebGL: true
 })
@@ -527,6 +527,7 @@ const sketch = (p: p5) => {
     // Draw horizontal grid lines
     for (let row = 0; row < meshRows.value; row++) {
       p.beginShape()
+      p.noFill
       for (let col = 0; col < meshColumns.value; col++) {
         const node = grid[row]?.[col];
         if (node) {
@@ -539,6 +540,7 @@ const sketch = (p: p5) => {
     // Draw vertical grid lines
     for (let col = 0; col < meshColumns.value; col++) {
       p.beginShape()
+      p.noFill
       for (let row = 0; row < meshRows.value; row++) {
         const node = grid[row]?.[col];
         if (node) {
