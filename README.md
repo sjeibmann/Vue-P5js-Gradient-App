@@ -1,21 +1,23 @@
 # 🌈 Vue-P5js-Gradient-App
 
-A beautiful, interactive gradient visualization application built with Vue.js and P5.js. Create mesmerizing, animated gradients that undulate across your screen with full customization capabilities.
+A beautiful, interactive gradient mesh visualization application built with Vue.js and P5.js. Create mesmerizing, customizable gradient patterns by adjusting mesh nodes, colors, and grid density.
 
-![Gradient Visualization](https://via.placeholder.com/800x400/ff5f6d,ffc371?text=Gradient+Visualization)
+![Gradient Mesh Visualization](./screenshots/gradient-mesh-low-poly.png)
 
 ## ✨ Features
 
-- 🖼️ **Full-Screen Gradient Visualization** - Smooth, animated gradients that fill your browser window
-- 🎨 **Dynamic Color Configuration** - Add, remove, and modify gradient color steps in real-time
-- ⏱️ **Animation Controls** - Adjust animation speed and patterns for different visual effects
+- 🖼️ **Full-Screen Gradient Visualization** - Smooth, beautiful gradient meshes that fill your browser window
+- 🎨 **Mesh Node Customization** - Select and edit individual nodes in the mesh grid
+- 🎯 **Draggable Nodes** - Reposition mesh nodes to create custom gradient shapes
+- 🔍 **Configurable Mesh Density** - Adjust the number of rows and columns in the mesh grid
+- 👁️ **Mesh Visibility Toggle** - Show or hide the mesh grid and nodes
 - 📱 **Responsive Design** - Works beautifully on any device or screen size
 - 🧩 **Intuitive UI** - Minimalist interface with a sliding drawer for controls
-- 💾 **State Persistence** - Your gradient settings are saved between sessions
+- ⚡ **WebGL Acceleration** - Hardware-accelerated rendering for smooth performance
 
 ## 🛠️ Tech Stack
 
-- **[Vue.js 3](https://vuejs.org/)** - Progressive JavaScript framework
+- **[Vue.js 3](https://vuejs.org/)** - Progressive JavaScript framework with Composition API
 - **[P5.js](https://p5js.org/)** - Creative coding library for graphics and animations
 - **[Pinia](https://pinia.vuejs.org/)** - Intuitive, type safe state management
 - **[Vue Router](https://router.vuejs.org/)** - Official router for Vue.js
@@ -55,11 +57,13 @@ yarn dev
 
 ## 🎮 How to Use
 
-1. **View the Gradient**: When you first open the app, you'll see a full-screen gradient animation
+1. **View the Gradient**: When you first open the app, you'll see a full-screen gradient mesh visualization
 2. **Open the Controls**: Click the drawer handle on the right side of the screen to open the control panel
-3. **Customize Colors**: Use the color pickers to change gradient colors or add new color steps
-4. **Adjust Animation**: Use the sliders to change animation speed and behavior
-5. **Save Your Creation**: Your settings are automatically saved for your next visit
+3. **Adjust Mesh Density**: Use the row and column inputs to change the mesh grid density
+4. **Select Nodes**: Click on any node in the mesh to select it
+5. **Edit Node Colors**: Use the color picker to change the color of the selected node
+6. **Reposition Nodes**: Drag nodes to create custom gradient shapes
+7. **Toggle Mesh Visibility**: Use the checkbox to show or hide the mesh grid and nodes
 
 ## 🧪 Development
 
@@ -74,8 +78,7 @@ src/
 ├── composables/     # Reusable composition functions
 ├── router/          # Vue Router configuration
 ├── stores/          # Pinia stores
-│   ├── gradient.js  # Gradient color steps store
-│   └── animation.js # Animation settings store
+│   └── gradient.ts  # Gradient and mesh configuration store
 ├── views/           # Page components
 └── App.vue          # Root component
 ```
@@ -101,21 +104,30 @@ flowchart TD
     MainView --> Drawer[Drawer.vue]
     
     GradientCanvas --> P5Instance[P5.js Instance]
+    P5Instance --> MeshGradient[Mesh Gradient]
+    P5Instance --> NodeSelection[Node Selection]
+    P5Instance --> ColorManagement[Color Management]
+    
     Drawer --> ColorControls[ColorControls.vue]
-    Drawer --> AnimationControls[AnimationControls.vue]
+    Drawer --> MeshControls[MeshControls.vue]
+    Drawer --> MeshNodeControls[MeshNodeControls.vue]
     
     ColorControls --> Store[Pinia Store]
-    AnimationControls --> Store
+    MeshControls --> Store
+    MeshNodeControls --> Store
     P5Instance --> Store
 ```
 
 ## 🔍 Key Technical Features
 
 - **P5.js Integration**: Uses P5.js in instance mode for better encapsulation within Vue components
-- **Reactive State Management**: Pinia stores for managing gradient and animation settings
+- **Reactive State Management**: Pinia store for managing gradient and mesh settings
+- **Mesh Gradient Implementation**: Grid-based approach with configurable rows and columns
+- **Bilinear Interpolation**: Smooth color transitions between mesh nodes
+- **WebGL Rendering**: Hardware acceleration for better performance
 - **Responsive Canvas**: Automatically resizes to fit any screen size
-- **Performance Optimization**: Efficient rendering techniques for smooth animations
-- **Component Architecture**: Clean separation of concerns between visualization and UI
+- **Touch Support**: Mobile-friendly interactions for node selection and dragging
+- **Computed Node Grid**: Efficient node lookup for improved performance
 
 ## 📝 License
 
@@ -137,9 +149,3 @@ Contributions, issues, and feature requests are welcome! Feel free to check the 
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## 📸 Screenshots
-
-![Screenshot 1](https://via.placeholder.com/400x300/ff5f6d?text=Screenshot+1)
-![Screenshot 2](https://via.placeholder.com/400x300/ffc371?text=Screenshot+2)
-![Screenshot 3](https://via.placeholder.com/400x300/c471ff?text=Screenshot+3)

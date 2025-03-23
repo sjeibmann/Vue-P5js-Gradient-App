@@ -42,8 +42,7 @@ src/
 ├── composables/     # Reusable composition functions
 ├── router/          # Vue Router configuration
 ├── stores/          # Pinia stores
-│   ├── gradient.js  # Gradient color steps store
-│   └── animation.js # Animation settings store
+│   └── gradient.js  # Gradient color steps and mesh configuration store
 ├── views/           # Page components
 └── App.vue          # Root component
 ```
@@ -76,7 +75,7 @@ onUnmounted(() => {
 ### State Management
 
 - Use Pinia for global state management
-- Structure stores by domain (gradient, animation, spline)
+- Structure stores by domain (gradient, mesh)
 - Use the `persist` option for state that should survive page refreshes
 - Watch store state in components to react to changes
 
@@ -86,71 +85,135 @@ import { useGradientStore } from '@/stores/gradient';
 import { storeToRefs } from 'pinia';
 
 const gradientStore = useGradientStore();
-const { colorStops, gradientType, blendSettings } = storeToRefs(gradientStore);
+const { colorStops, meshRows, meshColumns, meshVisibility } = storeToRefs(gradientStore);
 
 // Watch for changes to update P5 sketch
-watch([colorStops, gradientType, blendSettings], () => {
+watch([colorStops, meshRows, meshColumns, meshVisibility], () => {
   // Update visualization
 }, { deep: true });
 ```
 
-### Spline Path Implementation
+### Mesh Gradient Implementation
 
-- Use Catmull-Rom or Bézier splines for smooth path calculation
-- Implement node-based editing with drag-and-drop support
-- Store spline nodes in Pinia store for persistence
-- Recalculate spline path when nodes change
+The mesh gradient is implemented using a grid-based approach with rows and columns:
 
 ```javascript
-// Example pattern for spline calculation
-function calculateSplinePath(nodes, splineType, resolution = 100) {
-  const points = [];
+// Mesh nodes data structure
+interface MeshNode {
+  id: number
+  row: number
+  col: number
+  x: number
+  y: number
+  color: string
+  manuallyMoved?: boolean
+}
+
+// Initialize mesh nodes
+const initializeMeshNodes = () => {
+  const newNodes = []
+  const rows = meshRows.value
+  const cols = meshColumns.value
   
-  if (splineType === 'catmull-rom') {
-    // Catmull-Rom implementation
-    for (let i = 0; i < nodes.length - 3; i++) {
-      for (let j = 0; j < resolution; j++) {
-        const t = j / resolution;
-        const point = catmullRomSpline(
-          nodes[i], 
-          nodes[i + 1], 
-          nodes[i + 2], 
-          nodes[i + 3], 
-          t
-        );
-        points.push(point);
-      }
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      // Calculate normalized position (0-1)
+      const normalizedX = col / (cols - 1)
+      const normalizedY = row / (rows - 1)
+      
+      // Calculate actual pixel position
+      const x = normalizedX * width.value
+      const y = normalizedY * height.value
+      
+      // Generate a color based on position
+      const color = getColorForPosition(normalizedX, normalizedY)
+      
+      newNodes.push({
+        id: row * cols + col,
+        row,
+        col,
+        x,
+        y,
+        color
+      })
     }
-  } else if (splineType === 'bezier') {
-    // Bézier implementation
-    // ...
   }
   
-  return points;
+  meshNodes.value = newNodes
 }
 ```
 
-### Gradient Types
-
-- Implement three gradient types: linear, radial, and shaped
-- Allow dynamic switching between types without restarting animation
-- Use appropriate rendering technique for each type
+The mesh gradient is rendered using triangles for smooth color blending:
 
 ```javascript
-// Example pattern for gradient type rendering
-function renderGradient(p, gradientType, colorStops, splineNodes) {
-  switch (gradientType) {
-    case 'linear':
-      drawLinearGradient(p, colorStops, 0, 0, p.width, p.height);
-      break;
-    case 'radial':
-      drawRadialGradient(p, colorStops, p.width / 2, p.height / 2, p.width / 2);
-      break;
-    case 'shaped':
-      drawShapedGradient(p, colorStops, splineNodes, 'catmull-rom');
-      break;
+// Draw the mesh gradient using triangles
+const drawMeshGradient = (p) => {
+  if (meshNodes.value.length < 4) return
+  
+  // For each cell in the mesh grid (defined by 4 nodes), draw 2 triangles
+  for (let row = 0; row < meshRows.value - 1; row++) {
+    for (let col = 0; col < meshColumns.value - 1; col++) {
+      // Get the 4 nodes that define this cell
+      const topLeft = meshNodes.value.find(n => n.row === row && n.col === col)
+      const topRight = meshNodes.value.find(n => n.row === row && n.col === col + 1)
+      const bottomLeft = meshNodes.value.find(n => n.row === row + 1 && n.col === col)
+      const bottomRight = meshNodes.value.find(n => n.row === row + 1 && n.col === col + 1)
+      
+      if (topLeft && topRight && bottomLeft && bottomRight) {
+        // Draw first triangle (top-left, bottom-left, top-right)
+        p.noStroke()
+        p.beginShape(p.TRIANGLES)
+        
+        p.fill(p.color(topLeft.color))
+        p.vertex(topLeft.x, topLeft.y)
+        
+        p.fill(p.color(bottomLeft.color))
+        p.vertex(bottomLeft.x, bottomLeft.y)
+        
+        p.fill(p.color(topRight.color))
+        p.vertex(topRight.x, topRight.y)
+        
+        p.endShape()
+        
+        // Draw second triangle (bottom-left, bottom-right, top-right)
+        p.beginShape(p.TRIANGLES)
+        
+        p.fill(p.color(bottomLeft.color))
+        p.vertex(bottomLeft.x, bottomLeft.y)
+        
+        p.fill(p.color(bottomRight.color))
+        p.vertex(bottomRight.x, bottomRight.y)
+        
+        p.fill(p.color(topRight.color))
+        p.vertex(topRight.x, topRight.y)
+        
+        p.endShape()
+      }
+    }
   }
 }
+```
+
+### Event System
+
+A custom event emitter is used for mesh node color updates:
+
+```javascript
+// Create a custom event bus for mesh node color updates
+const emitter = mitt<{
+  'update-mesh-node-color': { id: number; color: string }
+}>()
+
+// Listen for color update events
+emitter.on('update-mesh-node-color', ({ id, color }) => {
+  const node = meshNodes.value.find(n => n.id === id)
+  if (node) {
+    node.color = color
+  }
+})
+
+// Expose the emitter to the parent component
+defineExpose({ emitter })
 ```
 
 ### Color Management
@@ -158,7 +221,6 @@ function renderGradient(p, gradientType, colorStops, splineNodes) {
 - Support multiple color stops with position control
 - Implement color blending with smoothness control
 - Use P5.js `lerpColor()` for smooth color interpolation
-- Calculate gradient positions based on the current animation time
 - Optimize by pre-calculating values when possible
 
 ```javascript
@@ -187,39 +249,6 @@ function interpolateColors(colorStops, t, smoothness = 0.5) {
 }
 ```
 
-### Animation Implementation
-
-- Implement consistent timing using `deltaTime` or `millis()`
-- Support start/stop controls
-- Implement color cycling along paths
-- Use easing functions for smooth transitions
-
-```javascript
-// Example pattern for animation with consistent timing
-let lastTime = 0;
-let animationProgress = 0;
-
-p.draw = () => {
-  const currentTime = p.millis();
-  const deltaTime = currentTime - lastTime;
-  lastTime = currentTime;
-  
-  if (isPlaying) {
-    // Update animation progress based on deltaTime and speed
-    animationProgress += (deltaTime / 1000) * speed;
-    
-    // Ensure it loops between 0 and 1
-    animationProgress = animationProgress % 1;
-    
-    // Use animationProgress to update the visualization
-    // ...
-  }
-  
-  // Render the current state
-  renderGradient(p, gradientType, colorStops, splineNodes);
-};
-```
-
 ## Known Challenges
 
 1. **P5.js and Vue Integration**:
@@ -227,7 +256,7 @@ p.draw = () => {
    - Solution: Use instance mode and proper lifecycle management
 
 2. **Performance Optimization**:
-   - Gradient animations can be CPU-intensive
+   - Gradient rendering can be CPU-intensive
    - Solution: Limit unnecessary redraws, use appropriate frame rates, enable GPU acceleration
 
 3. **Responsive Canvas**:
@@ -238,21 +267,21 @@ p.draw = () => {
    - Interpolating between multiple colors is more complex than two colors
    - Solution: Implement multi-step interpolation algorithm with position-based blending
 
-5. **Spline Path Calculation**:
-   - Calculating smooth splines can be computationally expensive
-   - Solution: Cache calculated paths, only recalculate when nodes change
-
-6. **Touch Interaction for Spline Editing**:
+5. **Touch Interaction for Mesh Editing**:
    - Mobile touch events require different handling than mouse events
    - Solution: Implement touch event handlers with appropriate hit testing
 
-7. **Gradient Type Switching**:
-   - Switching between gradient types needs to maintain current colors and animation state
-   - Solution: Abstract gradient rendering from gradient type, share common state
-
-8. **60 FPS Performance Target**:
-   - Complex gradients and animations might impact performance
+6. **60 FPS Performance Target**:
+   - Complex gradients might impact performance
    - Solution: Use WebGL mode when available, optimize rendering algorithms, implement adaptive complexity
+
+7. **Mesh Node Selection**:
+   - Selecting small nodes on mobile devices can be difficult
+   - Solution: Implement larger hit areas and visual feedback for selected nodes
+
+8. **Bilinear Interpolation**:
+   - Implementing smooth color transitions between mesh nodes
+   - Solution: Use bilinear interpolation for smoother gradients
 
 ## User Preferences
 
@@ -261,7 +290,7 @@ To be updated as we learn more about user preferences during development.
 ## Tool Usage Patterns
 
 - Use Vue DevTools for debugging component state and Pinia stores
-- Use browser performance tools to monitor animation frame rates
+- Use browser performance tools to monitor rendering frame rates
 - Use ESLint and Prettier for code quality and formatting
 
 ## Evolution of Project Decisions
@@ -269,11 +298,15 @@ To be updated as we learn more about user preferences during development.
 This section will track key decisions and their evolution as the project progresses.
 
 1. **Initial Architecture**: Component-based with P5.js in instance mode
-2. **State Management**: Pinia with separate stores for gradient and animation settings
+2. **State Management**: Pinia with separate stores for gradient and mesh settings
 3. **UI Framework**: Material UI (MUI) for consistent design elements
+4. **Gradient Implementation**: Switched from linear/radial gradients to mesh-based gradient
+5. **Animation Features**: Removed animation features to focus on mesh gradient implementation
+6. **Rendering Optimization**: Added WebGL support for hardware acceleration
 
 ## Workflow Optimizations
 
 - Use hot module replacement (HMR) during development
 - Implement component-driven development workflow
 - Test gradient rendering in isolation before integrating with UI
+- Use computed properties for efficient node lookup
