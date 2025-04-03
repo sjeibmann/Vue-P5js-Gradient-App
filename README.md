@@ -2,7 +2,7 @@
 
 A beautiful, interactive gradient mesh visualization application built with Vue.js and P5.js. Create mesmerizing, customizable gradient patterns by adjusting mesh nodes, colors, and grid density.
 
-![Gradient Mesh Visualization](./screenshots/gradient-mesh-low-poly.png)
+![Gradient Mesh Visualization](./screenshots/gradient-mesh-example.png)
 
 ## ✨ Features
 
